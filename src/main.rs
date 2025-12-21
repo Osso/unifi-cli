@@ -28,6 +28,11 @@ enum Commands {
         #[command(subcommand)]
         command: InternetCommands,
     },
+    /// Static DNS records
+    Dns {
+        #[command(subcommand)]
+        command: DnsCommands,
+    },
     /// Security settings (IPS, ad blocking, DNS filtering)
     Security,
     /// Firewall rules and policies
@@ -93,6 +98,24 @@ enum InternetCommands {
     Dns,
 }
 
+#[derive(Subcommand)]
+enum DnsCommands {
+    /// List static DNS records
+    List,
+    /// Add a static DNS record (A record)
+    Add {
+        /// Hostname (e.g., git.localdomain)
+        name: String,
+        /// IP address (e.g., 192.168.2.32)
+        ip: String,
+    },
+    /// Delete a static DNS record by ID
+    Delete {
+        /// Record ID
+        id: String,
+    },
+}
+
 fn get_client() -> Result<api::Client> {
     let cfg = config::load_config()?;
     let host = cfg
@@ -132,6 +155,23 @@ async fn main() -> Result<()> {
                 let client = get_client()?;
                 let dns = client.get_dns_settings().await?;
                 println!("{}", serde_json::to_string_pretty(&dns)?);
+            }
+        },
+        Commands::Dns { command } => match command {
+            DnsCommands::List => {
+                let client = get_client()?;
+                let records = client.get_dns_records().await?;
+                println!("{}", serde_json::to_string_pretty(&records)?);
+            }
+            DnsCommands::Add { name, ip } => {
+                let client = get_client()?;
+                let record = client.create_dns_record(&name, &ip).await?;
+                println!("{}", serde_json::to_string_pretty(&record)?);
+            }
+            DnsCommands::Delete { id } => {
+                let client = get_client()?;
+                client.delete_dns_record(&id).await?;
+                println!("Deleted DNS record {}", id);
             }
         },
         Commands::Security => {
