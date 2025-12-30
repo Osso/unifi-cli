@@ -249,7 +249,7 @@ async fn main() -> Result<()> {
                 let clients = client.get_clients_offline().await?;
                 println!("{}", serde_json::to_string_pretty(&clients)?);
             }
-        }
+        },
     }
 
     Ok(())
