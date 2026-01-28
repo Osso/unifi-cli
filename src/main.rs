@@ -320,13 +320,34 @@ async fn main() -> Result<()> {
                 rule.insert("rule_index".into(), serde_json::json!(rule_index));
                 rule.insert("enabled".into(), serde_json::json!(enabled));
                 rule.insert("logging".into(), serde_json::json!(logging));
-                rule.insert("protocol".into(), serde_json::json!(protocol.unwrap_or_else(|| "all".to_string())));
-                rule.insert("src_address".into(), serde_json::json!(src_address.unwrap_or_default()));
-                rule.insert("dst_address".into(), serde_json::json!(dst_address.unwrap_or_default()));
-                rule.insert("src_port".into(), serde_json::json!(src_port.unwrap_or_default()));
-                rule.insert("dst_port".into(), serde_json::json!(dst_port.unwrap_or_default()));
-                rule.insert("src_firewallgroup_ids".into(), serde_json::json!(src_firewallgroup_ids.unwrap_or_default()));
-                rule.insert("dst_firewallgroup_ids".into(), serde_json::json!(dst_firewallgroup_ids.unwrap_or_default()));
+                rule.insert(
+                    "protocol".into(),
+                    serde_json::json!(protocol.unwrap_or_else(|| "all".to_string())),
+                );
+                rule.insert(
+                    "src_address".into(),
+                    serde_json::json!(src_address.unwrap_or_default()),
+                );
+                rule.insert(
+                    "dst_address".into(),
+                    serde_json::json!(dst_address.unwrap_or_default()),
+                );
+                rule.insert(
+                    "src_port".into(),
+                    serde_json::json!(src_port.unwrap_or_default()),
+                );
+                rule.insert(
+                    "dst_port".into(),
+                    serde_json::json!(dst_port.unwrap_or_default()),
+                );
+                rule.insert(
+                    "src_firewallgroup_ids".into(),
+                    serde_json::json!(src_firewallgroup_ids.unwrap_or_default()),
+                );
+                rule.insert(
+                    "dst_firewallgroup_ids".into(),
+                    serde_json::json!(dst_firewallgroup_ids.unwrap_or_default()),
+                );
                 let created = client.create_firewall_rule(&rule).await?;
                 println!("{}", serde_json::to_string_pretty(&created)?);
             }
@@ -347,18 +368,42 @@ async fn main() -> Result<()> {
             } => {
                 let client = get_client()?;
                 let mut fields = serde_json::Map::new();
-                if let Some(v) = name { fields.insert("name".into(), serde_json::json!(v)); }
-                if let Some(v) = action { fields.insert("action".into(), serde_json::json!(v)); }
-                if let Some(v) = rule_index { fields.insert("rule_index".into(), serde_json::json!(v)); }
-                if let Some(v) = src_address { fields.insert("src_address".into(), serde_json::json!(v)); }
-                if let Some(v) = dst_address { fields.insert("dst_address".into(), serde_json::json!(v)); }
-                if let Some(v) = protocol { fields.insert("protocol".into(), serde_json::json!(v)); }
-                if let Some(v) = src_port { fields.insert("src_port".into(), serde_json::json!(v)); }
-                if let Some(v) = dst_port { fields.insert("dst_port".into(), serde_json::json!(v)); }
-                if let Some(v) = src_firewallgroup_ids { fields.insert("src_firewallgroup_ids".into(), serde_json::json!(v)); }
-                if let Some(v) = dst_firewallgroup_ids { fields.insert("dst_firewallgroup_ids".into(), serde_json::json!(v)); }
-                if let Some(v) = enabled { fields.insert("enabled".into(), serde_json::json!(v)); }
-                if let Some(v) = logging { fields.insert("logging".into(), serde_json::json!(v)); }
+                if let Some(v) = name {
+                    fields.insert("name".into(), serde_json::json!(v));
+                }
+                if let Some(v) = action {
+                    fields.insert("action".into(), serde_json::json!(v));
+                }
+                if let Some(v) = rule_index {
+                    fields.insert("rule_index".into(), serde_json::json!(v));
+                }
+                if let Some(v) = src_address {
+                    fields.insert("src_address".into(), serde_json::json!(v));
+                }
+                if let Some(v) = dst_address {
+                    fields.insert("dst_address".into(), serde_json::json!(v));
+                }
+                if let Some(v) = protocol {
+                    fields.insert("protocol".into(), serde_json::json!(v));
+                }
+                if let Some(v) = src_port {
+                    fields.insert("src_port".into(), serde_json::json!(v));
+                }
+                if let Some(v) = dst_port {
+                    fields.insert("dst_port".into(), serde_json::json!(v));
+                }
+                if let Some(v) = src_firewallgroup_ids {
+                    fields.insert("src_firewallgroup_ids".into(), serde_json::json!(v));
+                }
+                if let Some(v) = dst_firewallgroup_ids {
+                    fields.insert("dst_firewallgroup_ids".into(), serde_json::json!(v));
+                }
+                if let Some(v) = enabled {
+                    fields.insert("enabled".into(), serde_json::json!(v));
+                }
+                if let Some(v) = logging {
+                    fields.insert("logging".into(), serde_json::json!(v));
+                }
                 let updated = client.update_firewall_rule(&id, &fields).await?;
                 println!("{}", serde_json::to_string_pretty(&updated)?);
             }

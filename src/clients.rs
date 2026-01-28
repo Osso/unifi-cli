@@ -48,10 +48,7 @@ impl Client {
 
     /// Kick a client by MAC address (forces reconnect)
     pub async fn kick_client(&self, mac: &str) -> Result<()> {
-        let url = format!(
-            "{}/proxy/network/api/s/default/cmd/stamgr",
-            self.base_url
-        );
+        let url = format!("{}/proxy/network/api/s/default/cmd/stamgr", self.base_url);
 
         let resp = self
             .http
