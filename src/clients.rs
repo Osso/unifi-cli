@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde_json::Value;
 
 use crate::api::Client;
@@ -44,5 +44,30 @@ impl Client {
             .unwrap_or_default();
 
         Ok(Value::Array(offline))
+    }
+
+    /// Kick a client by MAC address (forces reconnect)
+    pub async fn kick_client(&self, mac: &str) -> Result<()> {
+        let url = format!(
+            "{}/proxy/network/api/s/default/cmd/stamgr",
+            self.base_url
+        );
+
+        let resp = self
+            .http
+            .post(&url)
+            .header("X-API-Key", &self.api_key)
+            .json(&serde_json::json!({"cmd": "kick-sta", "mac": mac}))
+            .send()
+            .await
+            .context("Failed to kick client")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Failed to kick client ({}): {}", status, body);
+        }
+
+        Ok(())
     }
 }

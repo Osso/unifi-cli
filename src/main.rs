@@ -104,9 +104,59 @@ enum FirewallCommands {
         /// Destination port
         #[arg(long)]
         dst_port: Option<String>,
+        /// Source firewall group IDs (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        src_firewallgroup_ids: Option<Vec<String>>,
+        /// Destination firewall group IDs (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        dst_firewallgroup_ids: Option<Vec<String>>,
         /// Enable the rule (default: true)
         #[arg(long, default_value_t = true)]
         enabled: bool,
+        /// Enable logging
+        #[arg(long)]
+        logging: bool,
+    },
+    /// Update a firewall rule by ID
+    Update {
+        /// Rule ID
+        id: String,
+        /// Rule name
+        #[arg(long)]
+        name: Option<String>,
+        /// Action: accept, drop, reject
+        #[arg(long)]
+        action: Option<String>,
+        /// Rule index (priority order)
+        #[arg(long)]
+        rule_index: Option<u32>,
+        /// Source address (CIDR or IP)
+        #[arg(long)]
+        src_address: Option<String>,
+        /// Destination address (CIDR or IP)
+        #[arg(long)]
+        dst_address: Option<String>,
+        /// Protocol: tcp, udp, tcp_udp, all, etc.
+        #[arg(long)]
+        protocol: Option<String>,
+        /// Source port
+        #[arg(long)]
+        src_port: Option<String>,
+        /// Destination port
+        #[arg(long)]
+        dst_port: Option<String>,
+        /// Source firewall group IDs (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        src_firewallgroup_ids: Option<Vec<String>>,
+        /// Destination firewall group IDs (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        dst_firewallgroup_ids: Option<Vec<String>>,
+        /// Enable or disable the rule
+        #[arg(long)]
+        enabled: Option<bool>,
+        /// Enable or disable logging
+        #[arg(long)]
+        logging: Option<bool>,
     },
     /// Delete a firewall rule by ID
     Delete {
@@ -135,6 +185,11 @@ enum ClientsCommands {
     Online,
     /// Offline clients
     Offline,
+    /// Reconnect a client (kick and let it rejoin)
+    Reconnect {
+        /// Client MAC address (e.g., aa:bb:cc:dd:ee:ff)
+        mac: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -252,7 +307,10 @@ async fn main() -> Result<()> {
                 protocol,
                 src_port,
                 dst_port,
+                src_firewallgroup_ids,
+                dst_firewallgroup_ids,
                 enabled,
+                logging,
             } => {
                 let client = get_client()?;
                 let mut rule = serde_json::Map::new();
@@ -261,23 +319,48 @@ async fn main() -> Result<()> {
                 rule.insert("ruleset".into(), serde_json::json!(ruleset));
                 rule.insert("rule_index".into(), serde_json::json!(rule_index));
                 rule.insert("enabled".into(), serde_json::json!(enabled));
-                if let Some(v) = protocol {
-                    rule.insert("protocol".into(), serde_json::json!(v));
-                }
-                if let Some(v) = src_address {
-                    rule.insert("src_address".into(), serde_json::json!(v));
-                }
-                if let Some(v) = dst_address {
-                    rule.insert("dst_address".into(), serde_json::json!(v));
-                }
-                if let Some(v) = src_port {
-                    rule.insert("src_port".into(), serde_json::json!(v));
-                }
-                if let Some(v) = dst_port {
-                    rule.insert("dst_port".into(), serde_json::json!(v));
-                }
+                rule.insert("logging".into(), serde_json::json!(logging));
+                rule.insert("protocol".into(), serde_json::json!(protocol.unwrap_or_else(|| "all".to_string())));
+                rule.insert("src_address".into(), serde_json::json!(src_address.unwrap_or_default()));
+                rule.insert("dst_address".into(), serde_json::json!(dst_address.unwrap_or_default()));
+                rule.insert("src_port".into(), serde_json::json!(src_port.unwrap_or_default()));
+                rule.insert("dst_port".into(), serde_json::json!(dst_port.unwrap_or_default()));
+                rule.insert("src_firewallgroup_ids".into(), serde_json::json!(src_firewallgroup_ids.unwrap_or_default()));
+                rule.insert("dst_firewallgroup_ids".into(), serde_json::json!(dst_firewallgroup_ids.unwrap_or_default()));
                 let created = client.create_firewall_rule(&rule).await?;
                 println!("{}", serde_json::to_string_pretty(&created)?);
+            }
+            FirewallCommands::Update {
+                id,
+                name,
+                action,
+                rule_index,
+                src_address,
+                dst_address,
+                protocol,
+                src_port,
+                dst_port,
+                src_firewallgroup_ids,
+                dst_firewallgroup_ids,
+                enabled,
+                logging,
+            } => {
+                let client = get_client()?;
+                let mut fields = serde_json::Map::new();
+                if let Some(v) = name { fields.insert("name".into(), serde_json::json!(v)); }
+                if let Some(v) = action { fields.insert("action".into(), serde_json::json!(v)); }
+                if let Some(v) = rule_index { fields.insert("rule_index".into(), serde_json::json!(v)); }
+                if let Some(v) = src_address { fields.insert("src_address".into(), serde_json::json!(v)); }
+                if let Some(v) = dst_address { fields.insert("dst_address".into(), serde_json::json!(v)); }
+                if let Some(v) = protocol { fields.insert("protocol".into(), serde_json::json!(v)); }
+                if let Some(v) = src_port { fields.insert("src_port".into(), serde_json::json!(v)); }
+                if let Some(v) = dst_port { fields.insert("dst_port".into(), serde_json::json!(v)); }
+                if let Some(v) = src_firewallgroup_ids { fields.insert("src_firewallgroup_ids".into(), serde_json::json!(v)); }
+                if let Some(v) = dst_firewallgroup_ids { fields.insert("dst_firewallgroup_ids".into(), serde_json::json!(v)); }
+                if let Some(v) = enabled { fields.insert("enabled".into(), serde_json::json!(v)); }
+                if let Some(v) = logging { fields.insert("logging".into(), serde_json::json!(v)); }
+                let updated = client.update_firewall_rule(&id, &fields).await?;
+                println!("{}", serde_json::to_string_pretty(&updated)?);
             }
             FirewallCommands::Delete { id } => {
                 let client = get_client()?;
@@ -337,6 +420,11 @@ async fn main() -> Result<()> {
                 let client = get_client()?;
                 let clients = client.get_clients_offline().await?;
                 println!("{}", serde_json::to_string_pretty(&clients)?);
+            }
+            ClientsCommands::Reconnect { mac } => {
+                let client = get_client()?;
+                client.kick_client(&mac).await?;
+                println!("Kicked client {}, it will reconnect", mac);
             }
         },
     }
