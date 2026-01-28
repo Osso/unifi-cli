@@ -1,5 +1,14 @@
 mod api;
+mod clients;
 mod config;
+mod devices;
+mod dns;
+mod firewall;
+mod internet;
+mod networks;
+mod security;
+mod vpn;
+mod wifi;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -66,6 +75,44 @@ enum FirewallCommands {
     Groups,
     /// List traffic rules
     Traffic,
+    /// Create a firewall rule
+    Add {
+        /// Rule name
+        #[arg(long)]
+        name: String,
+        /// Action: accept, drop, reject
+        #[arg(long)]
+        action: String,
+        /// Ruleset: LAN_IN, LAN_OUT, LAN_LOCAL, WAN_IN, WAN_OUT, WAN_LOCAL, etc.
+        #[arg(long)]
+        ruleset: String,
+        /// Rule index (priority order)
+        #[arg(long)]
+        rule_index: u32,
+        /// Source address (CIDR or IP)
+        #[arg(long)]
+        src_address: Option<String>,
+        /// Destination address (CIDR or IP)
+        #[arg(long)]
+        dst_address: Option<String>,
+        /// Protocol: tcp, udp, tcp_udp, all, etc.
+        #[arg(long)]
+        protocol: Option<String>,
+        /// Source port
+        #[arg(long)]
+        src_port: Option<String>,
+        /// Destination port
+        #[arg(long)]
+        dst_port: Option<String>,
+        /// Enable the rule (default: true)
+        #[arg(long, default_value_t = true)]
+        enabled: bool,
+    },
+    /// Delete a firewall rule by ID
+    Delete {
+        /// Rule ID
+        id: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -194,6 +241,48 @@ async fn main() -> Result<()> {
                 let client = get_client()?;
                 let traffic = client.get_traffic_rules().await?;
                 println!("{}", serde_json::to_string_pretty(&traffic)?);
+            }
+            FirewallCommands::Add {
+                name,
+                action,
+                ruleset,
+                rule_index,
+                src_address,
+                dst_address,
+                protocol,
+                src_port,
+                dst_port,
+                enabled,
+            } => {
+                let client = get_client()?;
+                let mut rule = serde_json::Map::new();
+                rule.insert("name".into(), serde_json::json!(name));
+                rule.insert("action".into(), serde_json::json!(action));
+                rule.insert("ruleset".into(), serde_json::json!(ruleset));
+                rule.insert("rule_index".into(), serde_json::json!(rule_index));
+                rule.insert("enabled".into(), serde_json::json!(enabled));
+                if let Some(v) = protocol {
+                    rule.insert("protocol".into(), serde_json::json!(v));
+                }
+                if let Some(v) = src_address {
+                    rule.insert("src_address".into(), serde_json::json!(v));
+                }
+                if let Some(v) = dst_address {
+                    rule.insert("dst_address".into(), serde_json::json!(v));
+                }
+                if let Some(v) = src_port {
+                    rule.insert("src_port".into(), serde_json::json!(v));
+                }
+                if let Some(v) = dst_port {
+                    rule.insert("dst_port".into(), serde_json::json!(v));
+                }
+                let created = client.create_firewall_rule(&rule).await?;
+                println!("{}", serde_json::to_string_pretty(&created)?);
+            }
+            FirewallCommands::Delete { id } => {
+                let client = get_client()?;
+                client.delete_firewall_rule(&id).await?;
+                println!("Deleted firewall rule {}", id);
             }
         },
         Commands::Vpn { command } => match command {
