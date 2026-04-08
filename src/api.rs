@@ -62,7 +62,11 @@ impl Client {
             "{}/proxy/network/v2/api/site/default/{}",
             self.base_url, endpoint
         );
-        self.fetch(&url, endpoint).await?.json().await.context("Failed to parse response")
+        self.fetch(&url, endpoint)
+            .await?
+            .json()
+            .await
+            .context("Failed to parse response")
     }
 
     pub(crate) async fn get_setting(&self, key: &str) -> Result<Value> {
@@ -70,7 +74,11 @@ impl Client {
             "{}/proxy/network/api/s/default/rest/setting/{}",
             self.base_url, key
         );
-        let body: Value = self.fetch(&url, &format!("setting {key}")).await?.json().await?;
+        let body: Value = self
+            .fetch(&url, &format!("setting {key}"))
+            .await?
+            .json()
+            .await?;
 
         body.get("data")
             .and_then(|d| d.as_array())
