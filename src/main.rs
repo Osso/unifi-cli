@@ -229,75 +229,210 @@ fn get_client() -> Result<api::Client> {
     api::Client::new(&host, &api_key)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let cli = Cli::parse();
+fn handle_config(host: Option<String>, api_key: Option<String>) -> Result<()> {
+    let mut cfg = config::load_config().unwrap_or_default();
+    if let Some(h) = host {
+        cfg.host = Some(h);
+    }
+    if let Some(k) = api_key {
+        cfg.api_key = Some(k);
+    }
+    config::save_config(&cfg)?;
+    println!("Config saved to ~/.config/unifi/config.json");
+    Ok(())
+}
 
-    match cli.command {
-        Commands::Config { host, api_key } => {
-            let mut cfg = config::load_config().unwrap_or_default();
-
-            if let Some(h) = host {
-                cfg.host = Some(h);
-            }
-            if let Some(k) = api_key {
-                cfg.api_key = Some(k);
-            }
-
-            config::save_config(&cfg)?;
-            println!("Config saved to ~/.config/unifi/config.json");
-        }
-        Commands::Internet { command } => match command {
-            InternetCommands::All => {
-                let client = get_client()?;
-                let wan = client.get_wan_settings().await?;
-                println!("{}", serde_json::to_string_pretty(&wan)?);
-            }
-            InternetCommands::Dns => {
-                let client = get_client()?;
-                let dns = client.get_dns_settings().await?;
-                println!("{}", serde_json::to_string_pretty(&dns)?);
-            }
-        },
-        Commands::Dns { command } => match command {
-            DnsCommands::List => {
-                let client = get_client()?;
-                let records = client.get_dns_records().await?;
-                println!("{}", serde_json::to_string_pretty(&records)?);
-            }
-            DnsCommands::Add { name, ip } => {
-                let client = get_client()?;
-                let record = client.create_dns_record(&name, &ip).await?;
-                println!("{}", serde_json::to_string_pretty(&record)?);
-            }
-            DnsCommands::Delete { id } => {
-                let client = get_client()?;
-                client.delete_dns_record(&id).await?;
-                println!("Deleted DNS record {}", id);
-            }
-        },
-        Commands::Security => {
+async fn handle_internet(command: InternetCommands) -> Result<()> {
+    match command {
+        InternetCommands::All => {
             let client = get_client()?;
-            let security = client.get_security_settings().await?;
-            println!("{}", serde_json::to_string_pretty(&security)?);
+            let wan = client.get_wan_settings().await?;
+            println!("{}", serde_json::to_string_pretty(&wan)?);
         }
-        Commands::Firewall { command } => match command {
-            FirewallCommands::Rules => {
-                let client = get_client()?;
-                let rules = client.get_firewall_rules().await?;
-                println!("{}", serde_json::to_string_pretty(&rules)?);
-            }
-            FirewallCommands::Groups => {
-                let client = get_client()?;
-                let groups = client.get_firewall_groups().await?;
-                println!("{}", serde_json::to_string_pretty(&groups)?);
-            }
-            FirewallCommands::Traffic => {
-                let client = get_client()?;
-                let traffic = client.get_traffic_rules().await?;
-                println!("{}", serde_json::to_string_pretty(&traffic)?);
-            }
-            FirewallCommands::Add {
+        InternetCommands::Dns => {
+            let client = get_client()?;
+            let dns = client.get_dns_settings().await?;
+            println!("{}", serde_json::to_string_pretty(&dns)?);
+        }
+    }
+    Ok(())
+}
+
+async fn handle_dns(command: DnsCommands) -> Result<()> {
+    match command {
+        DnsCommands::List => {
+            let client = get_client()?;
+            let records = client.get_dns_records().await?;
+            println!("{}", serde_json::to_string_pretty(&records)?);
+        }
+        DnsCommands::Add { name, ip } => {
+            let client = get_client()?;
+            let record = client.create_dns_record(&name, &ip).await?;
+            println!("{}", serde_json::to_string_pretty(&record)?);
+        }
+        DnsCommands::Delete { id } => {
+            let client = get_client()?;
+            client.delete_dns_record(&id).await?;
+            println!("Deleted DNS record {}", id);
+        }
+    }
+    Ok(())
+}
+
+async fn handle_security() -> Result<()> {
+    let client = get_client()?;
+    let security = client.get_security_settings().await?;
+    println!("{}", serde_json::to_string_pretty(&security)?);
+    Ok(())
+}
+
+async fn handle_firewall_add(
+    name: String,
+    action: String,
+    ruleset: String,
+    rule_index: u32,
+    src_address: Option<String>,
+    dst_address: Option<String>,
+    protocol: Option<String>,
+    src_port: Option<String>,
+    dst_port: Option<String>,
+    src_firewallgroup_ids: Option<Vec<String>>,
+    dst_firewallgroup_ids: Option<Vec<String>>,
+    enabled: bool,
+    logging: bool,
+) -> Result<()> {
+    let client = get_client()?;
+    let mut rule = serde_json::Map::new();
+    rule.insert("name".into(), serde_json::json!(name));
+    rule.insert("action".into(), serde_json::json!(action));
+    rule.insert("ruleset".into(), serde_json::json!(ruleset));
+    rule.insert("rule_index".into(), serde_json::json!(rule_index));
+    rule.insert("enabled".into(), serde_json::json!(enabled));
+    rule.insert("logging".into(), serde_json::json!(logging));
+    rule.insert(
+        "protocol".into(),
+        serde_json::json!(protocol.unwrap_or_else(|| "all".to_string())),
+    );
+    rule.insert(
+        "src_address".into(),
+        serde_json::json!(src_address.unwrap_or_default()),
+    );
+    rule.insert(
+        "dst_address".into(),
+        serde_json::json!(dst_address.unwrap_or_default()),
+    );
+    rule.insert(
+        "src_port".into(),
+        serde_json::json!(src_port.unwrap_or_default()),
+    );
+    rule.insert(
+        "dst_port".into(),
+        serde_json::json!(dst_port.unwrap_or_default()),
+    );
+    rule.insert(
+        "src_firewallgroup_ids".into(),
+        serde_json::json!(src_firewallgroup_ids.unwrap_or_default()),
+    );
+    rule.insert(
+        "dst_firewallgroup_ids".into(),
+        serde_json::json!(dst_firewallgroup_ids.unwrap_or_default()),
+    );
+    let created = client.create_firewall_rule(&rule).await?;
+    println!("{}", serde_json::to_string_pretty(&created)?);
+    Ok(())
+}
+
+async fn handle_firewall_update(
+    id: String,
+    name: Option<String>,
+    action: Option<String>,
+    rule_index: Option<u32>,
+    src_address: Option<String>,
+    dst_address: Option<String>,
+    protocol: Option<String>,
+    src_port: Option<String>,
+    dst_port: Option<String>,
+    src_firewallgroup_ids: Option<Vec<String>>,
+    dst_firewallgroup_ids: Option<Vec<String>>,
+    enabled: Option<bool>,
+    logging: Option<bool>,
+) -> Result<()> {
+    let client = get_client()?;
+    let mut fields = serde_json::Map::new();
+    if let Some(v) = name {
+        fields.insert("name".into(), serde_json::json!(v));
+    }
+    if let Some(v) = action {
+        fields.insert("action".into(), serde_json::json!(v));
+    }
+    if let Some(v) = rule_index {
+        fields.insert("rule_index".into(), serde_json::json!(v));
+    }
+    if let Some(v) = src_address {
+        fields.insert("src_address".into(), serde_json::json!(v));
+    }
+    if let Some(v) = dst_address {
+        fields.insert("dst_address".into(), serde_json::json!(v));
+    }
+    if let Some(v) = protocol {
+        fields.insert("protocol".into(), serde_json::json!(v));
+    }
+    if let Some(v) = src_port {
+        fields.insert("src_port".into(), serde_json::json!(v));
+    }
+    if let Some(v) = dst_port {
+        fields.insert("dst_port".into(), serde_json::json!(v));
+    }
+    if let Some(v) = src_firewallgroup_ids {
+        fields.insert("src_firewallgroup_ids".into(), serde_json::json!(v));
+    }
+    if let Some(v) = dst_firewallgroup_ids {
+        fields.insert("dst_firewallgroup_ids".into(), serde_json::json!(v));
+    }
+    if let Some(v) = enabled {
+        fields.insert("enabled".into(), serde_json::json!(v));
+    }
+    if let Some(v) = logging {
+        fields.insert("logging".into(), serde_json::json!(v));
+    }
+    let updated = client.update_firewall_rule(&id, &fields).await?;
+    println!("{}", serde_json::to_string_pretty(&updated)?);
+    Ok(())
+}
+
+async fn handle_firewall(command: FirewallCommands) -> Result<()> {
+    match command {
+        FirewallCommands::Rules => {
+            let client = get_client()?;
+            let rules = client.get_firewall_rules().await?;
+            println!("{}", serde_json::to_string_pretty(&rules)?);
+        }
+        FirewallCommands::Groups => {
+            let client = get_client()?;
+            let groups = client.get_firewall_groups().await?;
+            println!("{}", serde_json::to_string_pretty(&groups)?);
+        }
+        FirewallCommands::Traffic => {
+            let client = get_client()?;
+            let traffic = client.get_traffic_rules().await?;
+            println!("{}", serde_json::to_string_pretty(&traffic)?);
+        }
+        FirewallCommands::Add {
+            name,
+            action,
+            ruleset,
+            rule_index,
+            src_address,
+            dst_address,
+            protocol,
+            src_port,
+            dst_port,
+            src_firewallgroup_ids,
+            dst_firewallgroup_ids,
+            enabled,
+            logging,
+        } => {
+            handle_firewall_add(
                 name,
                 action,
                 ruleset,
@@ -311,47 +446,25 @@ async fn main() -> Result<()> {
                 dst_firewallgroup_ids,
                 enabled,
                 logging,
-            } => {
-                let client = get_client()?;
-                let mut rule = serde_json::Map::new();
-                rule.insert("name".into(), serde_json::json!(name));
-                rule.insert("action".into(), serde_json::json!(action));
-                rule.insert("ruleset".into(), serde_json::json!(ruleset));
-                rule.insert("rule_index".into(), serde_json::json!(rule_index));
-                rule.insert("enabled".into(), serde_json::json!(enabled));
-                rule.insert("logging".into(), serde_json::json!(logging));
-                rule.insert(
-                    "protocol".into(),
-                    serde_json::json!(protocol.unwrap_or_else(|| "all".to_string())),
-                );
-                rule.insert(
-                    "src_address".into(),
-                    serde_json::json!(src_address.unwrap_or_default()),
-                );
-                rule.insert(
-                    "dst_address".into(),
-                    serde_json::json!(dst_address.unwrap_or_default()),
-                );
-                rule.insert(
-                    "src_port".into(),
-                    serde_json::json!(src_port.unwrap_or_default()),
-                );
-                rule.insert(
-                    "dst_port".into(),
-                    serde_json::json!(dst_port.unwrap_or_default()),
-                );
-                rule.insert(
-                    "src_firewallgroup_ids".into(),
-                    serde_json::json!(src_firewallgroup_ids.unwrap_or_default()),
-                );
-                rule.insert(
-                    "dst_firewallgroup_ids".into(),
-                    serde_json::json!(dst_firewallgroup_ids.unwrap_or_default()),
-                );
-                let created = client.create_firewall_rule(&rule).await?;
-                println!("{}", serde_json::to_string_pretty(&created)?);
-            }
-            FirewallCommands::Update {
+            )
+            .await?;
+        }
+        FirewallCommands::Update {
+            id,
+            name,
+            action,
+            rule_index,
+            src_address,
+            dst_address,
+            protocol,
+            src_port,
+            dst_port,
+            src_firewallgroup_ids,
+            dst_firewallgroup_ids,
+            enabled,
+            logging,
+        } => {
+            handle_firewall_update(
                 id,
                 name,
                 action,
@@ -365,113 +478,106 @@ async fn main() -> Result<()> {
                 dst_firewallgroup_ids,
                 enabled,
                 logging,
-            } => {
-                let client = get_client()?;
-                let mut fields = serde_json::Map::new();
-                if let Some(v) = name {
-                    fields.insert("name".into(), serde_json::json!(v));
-                }
-                if let Some(v) = action {
-                    fields.insert("action".into(), serde_json::json!(v));
-                }
-                if let Some(v) = rule_index {
-                    fields.insert("rule_index".into(), serde_json::json!(v));
-                }
-                if let Some(v) = src_address {
-                    fields.insert("src_address".into(), serde_json::json!(v));
-                }
-                if let Some(v) = dst_address {
-                    fields.insert("dst_address".into(), serde_json::json!(v));
-                }
-                if let Some(v) = protocol {
-                    fields.insert("protocol".into(), serde_json::json!(v));
-                }
-                if let Some(v) = src_port {
-                    fields.insert("src_port".into(), serde_json::json!(v));
-                }
-                if let Some(v) = dst_port {
-                    fields.insert("dst_port".into(), serde_json::json!(v));
-                }
-                if let Some(v) = src_firewallgroup_ids {
-                    fields.insert("src_firewallgroup_ids".into(), serde_json::json!(v));
-                }
-                if let Some(v) = dst_firewallgroup_ids {
-                    fields.insert("dst_firewallgroup_ids".into(), serde_json::json!(v));
-                }
-                if let Some(v) = enabled {
-                    fields.insert("enabled".into(), serde_json::json!(v));
-                }
-                if let Some(v) = logging {
-                    fields.insert("logging".into(), serde_json::json!(v));
-                }
-                let updated = client.update_firewall_rule(&id, &fields).await?;
-                println!("{}", serde_json::to_string_pretty(&updated)?);
-            }
-            FirewallCommands::Delete { id } => {
-                let client = get_client()?;
-                client.delete_firewall_rule(&id).await?;
-                println!("Deleted firewall rule {}", id);
-            }
-        },
-        Commands::Vpn { command } => match command {
-            VpnCommands::Teleport => {
-                let client = get_client()?;
-                let teleport = client.get_vpn_teleport().await?;
-                println!("{}", serde_json::to_string_pretty(&teleport)?);
-            }
-            VpnCommands::SiteToSite => {
-                let client = get_client()?;
-                let s2s = client.get_vpn_site_to_site().await?;
-                println!("{}", serde_json::to_string_pretty(&s2s)?);
-            }
-            VpnCommands::Servers => {
-                let client = get_client()?;
-                let servers = client.get_vpn_servers().await?;
-                println!("{}", serde_json::to_string_pretty(&servers)?);
-            }
-            VpnCommands::Clients => {
-                let client = get_client()?;
-                let clients = client.get_vpn_clients().await?;
-                println!("{}", serde_json::to_string_pretty(&clients)?);
-            }
-        },
-        Commands::Networks => {
-            let client = get_client()?;
-            let networks = client.get_networks().await?;
-            println!("{}", serde_json::to_string_pretty(&networks)?);
+            )
+            .await?;
         }
-        Commands::Wifi => {
+        FirewallCommands::Delete { id } => {
             let client = get_client()?;
-            let wifi = client.get_wifi().await?;
-            println!("{}", serde_json::to_string_pretty(&wifi)?);
+            client.delete_firewall_rule(&id).await?;
+            println!("Deleted firewall rule {}", id);
         }
-        Commands::Devices => {
+    }
+    Ok(())
+}
+
+async fn handle_vpn(command: VpnCommands) -> Result<()> {
+    match command {
+        VpnCommands::Teleport => {
             let client = get_client()?;
-            let devices = client.get_devices().await?;
-            println!("{}", serde_json::to_string_pretty(&devices)?);
+            let teleport = client.get_vpn_teleport().await?;
+            println!("{}", serde_json::to_string_pretty(&teleport)?);
         }
-        Commands::Clients { command } => match command {
-            ClientsCommands::All => {
-                let client = get_client()?;
-                let clients = client.get_clients_all().await?;
-                println!("{}", serde_json::to_string_pretty(&clients)?);
-            }
-            ClientsCommands::Online => {
-                let client = get_client()?;
-                let clients = client.get_clients_online().await?;
-                println!("{}", serde_json::to_string_pretty(&clients)?);
-            }
-            ClientsCommands::Offline => {
-                let client = get_client()?;
-                let clients = client.get_clients_offline().await?;
-                println!("{}", serde_json::to_string_pretty(&clients)?);
-            }
-            ClientsCommands::Reconnect { mac } => {
-                let client = get_client()?;
-                client.kick_client(&mac).await?;
-                println!("Kicked client {}, it will reconnect", mac);
-            }
-        },
+        VpnCommands::SiteToSite => {
+            let client = get_client()?;
+            let s2s = client.get_vpn_site_to_site().await?;
+            println!("{}", serde_json::to_string_pretty(&s2s)?);
+        }
+        VpnCommands::Servers => {
+            let client = get_client()?;
+            let servers = client.get_vpn_servers().await?;
+            println!("{}", serde_json::to_string_pretty(&servers)?);
+        }
+        VpnCommands::Clients => {
+            let client = get_client()?;
+            let clients = client.get_vpn_clients().await?;
+            println!("{}", serde_json::to_string_pretty(&clients)?);
+        }
+    }
+    Ok(())
+}
+
+async fn handle_networks() -> Result<()> {
+    let client = get_client()?;
+    let networks = client.get_networks().await?;
+    println!("{}", serde_json::to_string_pretty(&networks)?);
+    Ok(())
+}
+
+async fn handle_wifi() -> Result<()> {
+    let client = get_client()?;
+    let wifi = client.get_wifi().await?;
+    println!("{}", serde_json::to_string_pretty(&wifi)?);
+    Ok(())
+}
+
+async fn handle_devices() -> Result<()> {
+    let client = get_client()?;
+    let devices = client.get_devices().await?;
+    println!("{}", serde_json::to_string_pretty(&devices)?);
+    Ok(())
+}
+
+async fn handle_clients(command: ClientsCommands) -> Result<()> {
+    match command {
+        ClientsCommands::All => {
+            let client = get_client()?;
+            let clients = client.get_clients_all().await?;
+            println!("{}", serde_json::to_string_pretty(&clients)?);
+        }
+        ClientsCommands::Online => {
+            let client = get_client()?;
+            let clients = client.get_clients_online().await?;
+            println!("{}", serde_json::to_string_pretty(&clients)?);
+        }
+        ClientsCommands::Offline => {
+            let client = get_client()?;
+            let clients = client.get_clients_offline().await?;
+            println!("{}", serde_json::to_string_pretty(&clients)?);
+        }
+        ClientsCommands::Reconnect { mac } => {
+            let client = get_client()?;
+            client.kick_client(&mac).await?;
+            println!("Kicked client {}, it will reconnect", mac);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    match cli.command {
+        Commands::Config { host, api_key } => handle_config(host, api_key)?,
+        Commands::Internet { command } => handle_internet(command).await?,
+        Commands::Dns { command } => handle_dns(command).await?,
+        Commands::Security => handle_security().await?,
+        Commands::Firewall { command } => handle_firewall(command).await?,
+        Commands::Vpn { command } => handle_vpn(command).await?,
+        Commands::Networks => handle_networks().await?,
+        Commands::Wifi => handle_wifi().await?,
+        Commands::Devices => handle_devices().await?,
+        Commands::Clients { command } => handle_clients(command).await?,
     }
 
     Ok(())
